@@ -10,6 +10,7 @@ import numpy as np
 import mediapipe as mp
 from collections import deque
 
+# fps 계산
 class CvFpsCalc(object):
     def __init__(self, buffer_len=1):
         self._start_tick = cv.getTickCount()
