@@ -1,0 +1,103 @@
+import cv2
+import mediapipe as mp
+import numpy as np
+mp_drawing = mp.solutions.drawing_utils
+mp_drawing_styles = mp.solutions.drawing_styles
+mp_pose = mp.solutions.pose
+
+# <--- 안득하 수정
+# python 3.10.11 버전
+from math import sqrt, degrees, atan2
+import os
+import time
+
+def distance(P1,P2):
+    return sqrt((P1.x - P2.x)**2 + (P1.y - P2.y)**2)
+
+def angle(P1,P2,P3):
+    result = degrees(atan2(P3.y - P2.y, P3.x - P2.x) -
+                     atan2(P1.y - P2.y, P1.x - P2.x))
+    if result < 0: result += 360 
+    return result   
+
+cnt = 0
+flag = 0
+# --------------->
+
+
+# For webcam input:
+cap = cv2.VideoCapture(0)
+with mp_pose.Pose(
+    min_detection_confidence=0.5,
+    min_tracking_confidence=0.5) as pose:
+  while cap.isOpened():
+    success, image = cap.read()
+
+    # <--- 안득하 수정
+    w,h = 640, 490 # 1280, 980
+    image = cv2.resize(image, (w, h))
+    # --------------->
+    
+    if not success:
+      print("Ignoring empty camera frame.")
+      # If loading a video, use 'break' instead of 'continue'.
+      continue
+
+    # To improve performance, optionally mark the image as not writeable to
+    # pass by reference.
+    image.flags.writeable = False
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    results = pose.process(image)
+
+    # Draw the pose annotation on the image.
+    image.flags.writeable = True
+    image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+    mp_drawing.draw_landmarks(
+        image,
+        results.pose_landmarks,
+        mp_pose.POSE_CONNECTIONS,
+        landmark_drawing_spec=mp_drawing_styles.get_default_pose_landmarks_style())
+
+
+    # <--- 안득하 수정
+    pos = 0
+    if results.pose_landmarks:
+        points = results.pose_landmarks.landmark 
+        ang = angle(points[13],points[11],points[23]) # 각도 계산
+        if distance(points[11],points[23]) > distance(points[11],points[25]):
+            pos = 3
+            posTxt = "BAD"
+        elif ang<250 or ang>300:
+            pos = 3
+            posTxt = "BAD"
+        elif distance(points[11],points[23]) < distance(points[23],points[29]) - 0.02 and (250 <= ang <= 300):
+            pos = 1
+            posTxt = "STD"
+        elif distance(points[11],points[23]) > distance(points[23],points[29])  and (250 <= ang <= 300):
+            pos = 2
+            posTxt = "SIT"
+        print(posTxt)
+
+        #print(ang) # 각도 출력
+        #print(distance(points[23],points[29])) # 거리 출력
+
+        if pos == 1 and flag == 1:
+            cnt += 1
+            flag = 0
+        elif pos == 2: flag = 1
+        elif pos == 3:
+            flag = 0
+        print(cnt)
+        
+    image = cv2.flip(image, 1)
+    cv2.putText(image, posTxt, (w-180, h-390), cv2.FONT_HERSHEY_PLAIN, 5, (0, 120, 200), 10)
+    cv2.putText(image, str(cnt), (w-140, h-50), cv2.FONT_HERSHEY_PLAIN, 8, (255, 0, 0), 13)
+    
+    # --------------->
+    
+              
+    # Flip the image horizontally for a selfie-view display.
+    cv2.imshow('MediaPipe Pose', image)
+    if cv2.waitKey(5) & 0xFF == 27:
+      break
+cap.release()
